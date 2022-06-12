@@ -74,7 +74,7 @@ bot.on('messageCreate', (message) => {
             s = s.slice(0, 10);
         }
 
-        message.reply("Top 10 lamo typers:\n" + s.join("\n"));
+        message.reply("Top 10 lmao typers:\n" + s.join("\n"));
 
     }
     /* if(message.content.toLocaleLowerCase() == "!count") {
