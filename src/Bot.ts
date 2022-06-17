@@ -2,14 +2,32 @@ import { Client, Intents, GuildTextBasedChannel, Message } from "discord.js";
 import { readFileSync, writeFileSync } from "fs";
 import {token} from "./config.json"
 
+import {Mutex} from "async-mutex"
+
+const fileWriter = new Mutex()
+
 interface Stats {
     name: string;
     id: string;
-    count: number;
+    lmao: number;
+    tf: number;
+}
+
+enum WORD {
+    LMAO,
+    TF
 }
 
 
-function updateStats(message: Message) {
+function escapeMarkdown(text: string): string {
+    var unescaped = text.replace(/\\(\*|_|`|~|\\)/g, '$1'); // unescape any "backslashed" character
+    var escaped = unescaped.replace(/(\*|_|`|~|\\)/g, '\\$1'); // escape *, _, `, ~, \
+    return escaped;
+  }
+
+async function updateStats(message: Message, word: WORD) {
+    if(message.author.id === bot.user?.id) return;
+    const release = await fileWriter.acquire()
     let rawdata = readFileSync("stats.json");
     let data = JSON.parse(rawdata.toString()) as Array<Stats>;
 
@@ -18,19 +36,44 @@ function updateStats(message: Message) {
     });
     if(index !== -1) {
         let s = data.at(index)!;
-        s.count = s?.count + 1;
+        switch (word) {
+            case WORD.LMAO:
+                s.lmao += 1;
+                break;
+            case WORD.TF:
+                s.tf += 1;
+                break;
+            default:
+                break;
+        }
         data[index] = s;
     } else {
-        let s: Stats = {
-            name: message.author.username,
-            id: message.author.id,
-            count: 1
-        }
-        data.push(s);
+        switch (word) {
+            case WORD.LMAO:
+                const newStat: Stats = {
+                    name: message.author.username,
+                    id: message.author.id,
+                    lmao: 1,
+                    tf: 0
+                }
+                data.push(newStat);
+                break;
+            case WORD.TF:
+                const s: Stats = {
+                    name: message.author.username,
+                    id: message.author.id,
+                    lmao: 0,
+                    tf: 1
+                }
+                data.push(s);
+            default:
+                break;
+        }  
     }
 
     const toFile = JSON.stringify(data);
     writeFileSync("stats.json", toFile)
+    release();
 }
 
 async function fetchAllMessages(channel: GuildTextBasedChannel): Promise<Array<Message>> {
@@ -62,22 +105,38 @@ bot.on('messageCreate', (message) => {
     if(message.content.toLocaleLowerCase() == "!stats") {
         let rawdata = readFileSync("stats.json");
         let data =  JSON.parse(rawdata.toString()) as Array<Stats>;
-        //message.reply(JSON.stringify(data));
 
-        data.sort((a, b) => b.count - a.count);
+        data.sort((a, b) => b.lmao - a.lmao);
         console.log(data);
-        let s = data.map((s, i) => {
-            return `${i + 1}. ${s.name}: ${s.count}`
+        let lmao = data.map((s, i) => {
+            return `${i + 1}. ${s.name}: ${s.lmao}`
         })
         
-        if (s.length > 10) {
-            s = s.slice(0, 10);
+        if (lmao.length > 10) {
+            lmao = lmao.slice(0, 10);
         }
 
-        message.reply("Top 10 lmao typers:\n" + s.join("\n"));
+        data.sort((a,b) => b.tf - a.tf);
+        let tf = data.map((s, i) => {
+            return `${i + 1}. ${s.name}: ${s.tf}`
+        })
+
+        if (tf.length > 10) {
+            tf = tf.slice(0, 10);
+        }
+
+        const reply = escapeMarkdown("Top 10 lmao typers:\n" + lmao.join("\n") + "\n\nTop 10 tf typers:\n" + tf.join("\n"))
+
+        message.reply(reply);
 
     }
-    /* if(message.content.toLocaleLowerCase() == "!count") {
+    if(message.content.toLocaleLowerCase() == "!count") {
+
+        if(message.author.id !== "133555220876623872") {
+            message.reply("Not allowed!");
+            return;
+        }
+
         let channels = message.guild?.channels.cache;
 
         channels = channels?.filter((c) => c.type == "GUILD_TEXT")!
@@ -86,33 +145,37 @@ bot.on('messageCreate', (message) => {
         let runs = 0
         let size = channels.size;
 
-        channels.forEach( async (c, index) => {
+        channels.forEach( async(c) => {
             const ch = c as GuildTextBasedChannel
+            console.log(c.name)
             let m = await fetchAllMessages(ch);
-            let i = 0;
             m.forEach(ms => {
                 if (ms.content.toLowerCase().includes("lmao")) {
-                    i++;
-                    updateStats(ms);
+                    updateStats(ms, WORD.LMAO);
+                }
+                if (ms.content.toLowerCase().includes("tf")) {
+                    updateStats(ms, WORD.TF);
                 }
             })
-
-            console.log(c.name + ": " + i)
             console.log(runs);
             runs++;
-            if(runs === size-1) {
-                console.log("DONE");
-            }
             if(runs === size) {
                 console.log("Mega Done")
+                message.reply("DONE")
             }
         })
 
-    } */
+    } 
     if(message.content.toLowerCase().includes("lmao")) {
         if (message.author.id == bot.user?.id) return;
         message.react("⬆")
-        updateStats(message);
+        updateStats(message, WORD.LMAO);
+    }
+
+    if(message.content.toLowerCase().includes("tf")) {
+        if (message.author.id == bot.user?.id) return;
+        message.react("⬆")
+        updateStats(message, WORD.TF);
     }
 })
 
