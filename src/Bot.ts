@@ -177,6 +177,21 @@ bot.on('messageCreate', (message) => {
         message.react("⬆")
         updateStats(message, WORD.TF);
     }
+
+    if(message.content.toLowerCase().includes("pinch")) {
+        if(message.author.id == bot.user?.id) return;
+        message.react("🤏")
+    }
+    if(message.content.toLowerCase().includes("lmfao")) {
+        if(message.author.id == bot.user?.id) return;
+        message.react("⬆");
+        updateStats(message, WORD.LMAO);
+    }
+    if(message.content.toLowerCase().includes("l m a o")) {
+        if(message.author.id == bot.user?.id) return;
+        message.react("⬆");
+        updateStats(message, WORD.LMAO);
+    }
 })
 
 bot.login(token);
